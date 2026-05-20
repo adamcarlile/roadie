@@ -169,7 +169,10 @@ events.onmessage = (m) => {
     const bars = document.querySelectorAll(".bar > div");
     if (bars.length) bars[bars.length - 1].style.width = e.percent + "%";
   } else if (e.type === "run-done") {
-    box.insertAdjacentHTML("beforeend", `<p>Done — ${e.copied} copied, ${e.failed} failed.</p>`);
+    const msg = e.err
+      ? `Sync aborted: ${esc(e.err)}`
+      : `Done — ${e.copied} copied, ${e.failed} failed.`;
+    box.insertAdjacentHTML("beforeend", `<p>${msg}</p>`);
   }
 };
 

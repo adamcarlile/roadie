@@ -12,8 +12,13 @@ func TestFreeBytesReportsPositive(t *testing.T) {
 	}
 }
 
-func TestIsMountPointFalseForOrdinaryDir(t *testing.T) {
-	if IsMountPoint(t.TempDir()) {
-		t.Error("IsMountPoint should be false for an ordinary temp directory")
+func TestDriveMounted(t *testing.T) {
+	// "/" is the root filesystem itself — never a separately mounted drive.
+	if DriveMounted("/") {
+		t.Error("DriveMounted(/) = true, want false")
+	}
+	// A missing path under "/" resolves up to the root device.
+	if DriveMounted("/no/such/path/roadie-test") {
+		t.Error("DriveMounted of a missing root-fs path = true, want false")
 	}
 }

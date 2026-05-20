@@ -20,16 +20,21 @@ type Server struct {
 
 	mu      sync.Mutex // guards running
 	running bool
+
+	// destReady reports whether a collection's destination drive is mounted.
+	// It is a field so tests can substitute a stub for the real filesystem.
+	destReady func(dest string) bool
 }
 
 // New builds a Server. web serves the embedded UI assets.
 func New(cfg *config.Config, store *manifest.Store, web http.Handler) *Server {
 	return &Server{
-		cfg:    cfg,
-		store:  store,
-		runner: syncer.NewRunner(),
-		hub:    newHub(),
-		web:    web,
+		cfg:       cfg,
+		store:     store,
+		runner:    syncer.NewRunner(),
+		hub:       newHub(),
+		web:       web,
+		destReady: syncer.DriveMounted,
 	}
 }
 

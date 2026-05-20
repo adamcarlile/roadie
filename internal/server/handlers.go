@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -142,10 +143,20 @@ func (s *Server) handleRemoveEntry(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }
 
-// handleSync starts a sync run if one is not already in progress. The disk
-// scan, reconcile, and rsync transfers all run in the background goroutine, so
-// the request returns 202 immediately and progress arrives over the SSE stream.
+// handleSync starts a sync run if one is not already in progress. Pre-flight
+// checks (destination drive mounted, and — in the goroutine — enough free
+// space) guard against syncing onto the system disk or overfilling the drive.
+// The disk scan, reconcile, and rsync transfers run in the background, so the
+// request returns 202 immediately and progress arrives over the SSE stream.
 func (s *Server) handleSync(w http.ResponseWriter, r *http.Request) {
+	// Pre-flight: refuse if a destination drive is not mounted — otherwise a
+	// sync would write into the bare mountpoint directory on the system disk.
+	for _, col := range s.cfg.Collections {
+		if !s.destReady(col.Dest) {
+			http.Error(w, "destination drive is not mounted", http.StatusServiceUnavailable)
+			return
+		}
+	}
 	if !s.tryClaimRun() {
 		http.Error(w, "a sync is already running", http.StatusConflict)
 		return
@@ -155,6 +166,7 @@ func (s *Server) handleSync(w http.ResponseWriter, r *http.Request) {
 		entries := s.store.Snapshot().Entries
 		plan := reconcile.Reconcile(entries, s.buildDiskState(entries))
 		var jobs []syncer.Job
+		var pending int64
 		for _, es := range plan.Entries {
 			if es.Status != reconcile.Pending {
 				continue
@@ -164,6 +176,20 @@ func (s *Server) handleSync(w http.ResponseWriter, r *http.Request) {
 				Collection: es.Entry.Collection, Path: es.Entry.Path,
 				Source: col.Source, Dest: col.Dest,
 			})
+			if sz, err := scan.PathSize(filepath.Join(col.Source, es.Entry.Path)); err == nil {
+				pending += sz
+			}
+		}
+		// Pre-flight: refuse the run if the pending media would not fit.
+		if len(jobs) > 0 {
+			if free, err := syncer.FreeBytes(jobs[0].Dest); err == nil && pending > free {
+				s.hub.publish(syncer.Event{
+					Type: syncer.EvRunDone,
+					Err: fmt.Sprintf("not enough space: %d MB needed, %d MB free",
+						pending/(1<<20), free/(1<<20)),
+				})
+				return
+			}
 		}
 		s.runner.Run(context.Background(), jobs, s.hub.publish)
 	}()

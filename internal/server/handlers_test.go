@@ -22,7 +22,9 @@ func testServer(t *testing.T) *Server {
 	if err != nil {
 		t.Fatal(err)
 	}
-	return New(cfg, store, http.NotFoundHandler())
+	s := New(cfg, store, http.NotFoundHandler())
+	s.destReady = func(string) bool { return true } // tests assume the drive is mounted
+	return s
 }
 
 func TestCollectionsEndpoint(t *testing.T) {
@@ -202,5 +204,15 @@ func TestStatusEndpoint(t *testing.T) {
 	}
 	if len(got.Events) != 0 {
 		t.Errorf("events = %v, want empty on an idle server", got.Events)
+	}
+}
+
+func TestSyncRefusedWhenDriveNotMounted(t *testing.T) {
+	s := testServer(t)
+	s.destReady = func(string) bool { return false } // external drive absent
+	rec := httptest.NewRecorder()
+	s.Handler().ServeHTTP(rec, httptest.NewRequest("POST", "/api/sync", nil))
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("status %d, want 503", rec.Code)
 	}
 }

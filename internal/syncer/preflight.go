@@ -6,18 +6,28 @@ import (
 	"syscall"
 )
 
-// IsMountPoint reports whether path is a mount point (its device differs
-// from its parent directory's device). Linux-only. Returns false on any stat
-// error, and false for the filesystem root "/" (whose parent is itself).
-func IsMountPoint(path string) bool {
-	var st, parent syscall.Stat_t
-	if err := syscall.Stat(path, &st); err != nil {
+// DriveMounted reports whether dest sits on a drive mounted separately from the
+// root filesystem. It walks up to the nearest existing ancestor of dest (dest
+// itself need not exist yet — rsync creates it) and compares that path's device
+// to "/": a different device means the external drive is mounted. A dest that
+// resolves to the root device means the drive is absent, and syncing there
+// would fill the system disk. Linux-only.
+func DriveMounted(dest string) bool {
+	var root syscall.Stat_t
+	if syscall.Stat("/", &root) != nil {
 		return false
 	}
-	if err := syscall.Stat(filepath.Dir(path), &parent); err != nil {
-		return false
+	for p := dest; ; {
+		var st syscall.Stat_t
+		if syscall.Stat(p, &st) == nil {
+			return st.Dev != root.Dev
+		}
+		parent := filepath.Dir(p)
+		if parent == p {
+			return false // reached "/" without finding an existing path
+		}
+		p = parent
 	}
-	return st.Dev != parent.Dev
 }
 
 // FreeBytes returns the free space, in bytes, of the filesystem at path.
