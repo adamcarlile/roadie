@@ -1,0 +1,8 @@
+# Build output
+/roadie
+/dist/
+
+# Go test artifacts
+*.test
+*.out
+coverage.*
