@@ -5,7 +5,7 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-ExecStart=/usr/local/bin/roadie -config /etc/roadie/collections.toml -manifest /var/lib/roadie/manifest.json -addr 0.0.0.0:8473
+ExecStart=/usr/local/bin/roadie serve -config /etc/roadie/collections.toml -manifest /var/lib/roadie/manifest.json -addr 0.0.0.0:8473
 Restart=on-failure
 RestartSec=5
 # Runs as root: the exfat destination drive is root-mounted, so a non-root
