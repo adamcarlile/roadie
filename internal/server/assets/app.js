@@ -128,9 +128,29 @@ async function loadManifest() {
     ul.appendChild(li);
   });
   const d = $("#drift");
-  d.innerHTML =
-    v.plan.drift.map((x) => `<li>${esc(x.collection)} / ${esc(x.path)}</li>`).join("") ||
-    "<li>None</li>";
+  d.innerHTML = "";
+  if (!v.plan.drift.length) {
+    d.innerHTML = "<li>None</li>";
+    return;
+  }
+  v.plan.drift.forEach((x) => {
+    const li = document.createElement("li");
+    li.innerHTML = `<span>${esc(x.collection)} / ${esc(x.path)}</span><button class="row">Remove</button>`;
+    li.querySelector("button").onclick = async () => {
+      if (!confirm(`Delete ${x.collection} / ${x.path} from the carnet drive?`)) return;
+      try {
+        await api("/api/prune", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ collection: x.collection, path: x.path }),
+        });
+        await loadManifest();
+      } catch (err) {
+        alert(`Failed to remove ${x.path}: ${err.message}`);
+      }
+    };
+    d.appendChild(li);
+  });
 }
 
 // Live sync — one SSE connection for the page lifetime.

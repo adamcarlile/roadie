@@ -170,6 +170,48 @@ func (s *Server) handleSync(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusAccepted, map[string]string{"status": "started"})
 }
 
+// handlePrune deletes a drifted object from a collection's dest. It refuses
+// to delete anything a manifest entry still covers — only reconcile-detected
+// drift may be removed.
+func (s *Server) handlePrune(w http.ResponseWriter, r *http.Request) {
+	var req entryReq
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Collection == "" || req.Path == "" {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+	col, ok := s.cfg.Collection(req.Collection)
+	if !ok {
+		http.Error(w, "unknown collection", http.StatusNotFound)
+		return
+	}
+	entries := s.store.Snapshot().Entries
+	plan := reconcile.Reconcile(entries, s.buildDiskState(entries))
+	isDrift := false
+	for _, d := range plan.Drift {
+		if d.Collection == req.Collection && d.Path == req.Path {
+			isDrift = true
+			break
+		}
+	}
+	if !isDrift {
+		http.Error(w, "path is not drift — refusing to delete", http.StatusConflict)
+		return
+	}
+	rel := filepath.Clean("/" + req.Path)
+	if rel == "/" {
+		// req.Path was ".", "..", "/" or similar — the target would be
+		// col.Dest itself. Refuse: this is the only deletion path in roadie.
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+	target := filepath.Join(col.Dest, rel)
+	if err := os.RemoveAll(target); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"status": "removed"})
+}
+
 // handleStream serves sync events as Server-Sent Events.
 func (s *Server) handleStream(w http.ResponseWriter, r *http.Request) {
 	flusher, ok := w.(http.Flusher)
