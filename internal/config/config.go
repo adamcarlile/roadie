@@ -13,13 +13,14 @@ const (
 	KindMovie = "movie"
 )
 
-// Collection is one configured source→dest mapping.
+// Collection is one configured source→dest mapping. Source and Dest are
+// server-internal filesystem paths and are excluded from the JSON API.
 type Collection struct {
-	ID     string `toml:"id"`
-	Label  string `toml:"label"`
-	Source string `toml:"source"`
-	Dest   string `toml:"dest"`
-	Kind   string `toml:"kind"`
+	ID     string `toml:"id" json:"id"`
+	Label  string `toml:"label" json:"label"`
+	Source string `toml:"source" json:"-"`
+	Dest   string `toml:"dest" json:"-"`
+	Kind   string `toml:"kind" json:"kind"`
 }
 
 // Config is the full set of configured collections.

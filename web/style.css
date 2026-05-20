@@ -1,0 +1,20 @@
+* { box-sizing: border-box; }
+body { font-family: system-ui, sans-serif; margin: 0; background: #14171c; color: #e6e6e6; }
+header { padding: 1rem; background: #1d2127; }
+h1 { margin: 0 0 .5rem; font-size: 1.3rem; }
+nav button { background: #2a2f38; color: #e6e6e6; border: 0; padding: .5rem 1rem; cursor: pointer; }
+nav button.active { background: #3b82f6; }
+main { padding: 1rem; }
+.tab { display: none; }
+.tab.active { display: block; }
+select, input { padding: .5rem; background: #2a2f38; color: #e6e6e6; border: 1px solid #3a3f48; }
+input#filter { width: 100%; margin: .5rem 0; }
+ul { list-style: none; padding: 0; }
+li { padding: .5rem; border-bottom: 1px solid #2a2f38; display: flex; justify-content: space-between; }
+button.row { background: #3b82f6; color: #fff; border: 0; padding: .25rem .6rem; cursor: pointer; }
+.status-synced { color: #4ade80; }
+.status-pending { color: #fbbf24; }
+.status-blocked { color: #f87171; }
+.overlap { color: #fbbf24; font-size: .8rem; }
+.bar { height: 1rem; background: #2a2f38; margin: .25rem 0; }
+.bar > div { height: 100%; background: #3b82f6; }

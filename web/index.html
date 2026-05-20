@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>roadie</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <header><h1>roadie</h1>
+    <nav>
+      <button data-tab="browse" class="active">Browse</button>
+      <button data-tab="manifest">Manifest</button>
+      <button data-tab="sync">Sync</button>
+    </nav>
+  </header>
+  <main>
+    <section id="browse" class="tab active">
+      <select id="collection"></select>
+      <input id="filter" placeholder="Filter…" autocomplete="off">
+      <ul id="objects"></ul>
+    </section>
+    <section id="manifest" class="tab">
+      <p id="space"></p>
+      <ul id="entries"></ul>
+      <h3>Drift</h3>
+      <ul id="drift"></ul>
+    </section>
+    <section id="sync" class="tab">
+      <button id="sync-btn">Sync now</button>
+      <div id="progress"></div>
+    </section>
+  </main>
+  <script src="/app.js"></script>
+</body>
+</html>
