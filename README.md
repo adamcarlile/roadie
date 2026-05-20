@@ -18,5 +18,25 @@ on explicit confirmation.
 
 ## Status
 
-Design approved. See [`docs/superpowers/specs/2026-05-20-roadie-design.md`](docs/superpowers/specs/2026-05-20-roadie-design.md).
-Implementation not yet started.
+Implemented. See the [design spec](docs/superpowers/specs/2026-05-20-roadie-design.md)
+and the [implementation plan](docs/superpowers/plans/2026-05-20-roadie.md).
+
+## Build & deploy
+
+```bash
+GOOS=linux GOARCH=amd64 go build -o roadie ./...
+scp roadie adam@carnet.home.adamcarlile.com:/tmp/roadie
+scp collections.toml.example adam@carnet.home.adamcarlile.com:/tmp/
+scp deploy/roadie.service adam@carnet.home.adamcarlile.com:/tmp/
+```
+
+On the carnet box:
+```bash
+sudo install -m755 /tmp/roadie /usr/local/bin/roadie
+sudo mkdir -p /etc/roadie /var/lib/roadie
+sudo cp /tmp/collections.toml.example /etc/roadie/collections.toml
+sudo cp /tmp/roadie.service /etc/systemd/system/roadie.service
+sudo systemctl enable --now roadie
+```
+
+The UI is then at `http://carnet.home.adamcarlile.com:8473`.

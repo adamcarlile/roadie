@@ -1,0 +1,29 @@
+# roadie collections — copy to /etc/roadie/collections.toml on the carnet box.
+
+[[collection]]
+id = "kids-tv"
+label = "Kids TV"
+source = "/nfs/media/Kids"
+dest = "/media/external/Media/Kids"
+kind = "tv"
+
+[[collection]]
+id = "tv"
+label = "TV"
+source = "/nfs/media/TV"
+dest = "/media/external/Media/TV"
+kind = "tv"
+
+[[collection]]
+id = "movies"
+label = "Movies"
+source = "/nfs/films/Movies"
+dest = "/media/external/Media/Movies"
+kind = "movie"
+
+[[collection]]
+id = "kids-movies"
+label = "Kids Movies"
+source = "/nfs/films/Movies"
+dest = "/media/external/Media/Kids Movies"
+kind = "movie"
