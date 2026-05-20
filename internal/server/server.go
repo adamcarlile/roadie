@@ -43,6 +43,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("DELETE /api/manifest/entries", s.handleRemoveEntry)
 	mux.HandleFunc("POST /api/sync", s.handleSync)
 	mux.HandleFunc("GET /api/sync/stream", s.handleStream)
+	mux.HandleFunc("GET /api/sync/status", s.handleStatus)
 	mux.HandleFunc("POST /api/prune", s.handlePrune)
 	mux.Handle("/", s.web)
 	return mux

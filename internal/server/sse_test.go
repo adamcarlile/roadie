@@ -9,7 +9,7 @@ import (
 
 func TestHubBroadcastsToSubscribers(t *testing.T) {
 	h := newHub()
-	ch := h.subscribe()
+	ch, _ := h.subscribe()
 	defer h.unsubscribe(ch)
 
 	h.publish(syncer.Event{Type: syncer.EvRunStart})
@@ -30,14 +30,14 @@ func TestHubPublishWithNoSubscribers(t *testing.T) {
 
 func TestHubSlowSubscriberDoesNotBlock(t *testing.T) {
 	h := newHub()
-	slow := h.subscribe()
+	slow, _ := h.subscribe()
 	defer h.unsubscribe(slow)
 	// Fill the slow subscriber's buffer so further sends to it would block.
 	for i := 0; i < subBuf; i++ {
 		h.publish(syncer.Event{Type: syncer.EvEntryProgress})
 	}
 	// A fresh subscriber with an empty buffer must still receive promptly.
-	fast := h.subscribe()
+	fast, _ := h.subscribe()
 	defer h.unsubscribe(fast)
 	h.publish(syncer.Event{Type: syncer.EvRunDone})
 	select {
@@ -52,7 +52,17 @@ func TestHubSlowSubscriberDoesNotBlock(t *testing.T) {
 
 func TestHubDoubleUnsubscribeIsSilent(t *testing.T) {
 	h := newHub()
-	ch := h.subscribe()
+	ch, _ := h.subscribe()
 	h.unsubscribe(ch)
 	h.unsubscribe(ch) // must not panic
+}
+
+func TestHubReplaysSnapshotToLateSubscriber(t *testing.T) {
+	h := newHub()
+	h.publish(syncer.Event{Type: syncer.EvRunStart})
+	h.publish(syncer.Event{Type: syncer.EvEntryStart, Path: "Up (2009).mkv"})
+	_, snap := h.subscribe()
+	if len(snap) != 2 || snap[1].Path != "Up (2009).mkv" {
+		t.Fatalf("snapshot = %+v, want the 2 prior events", snap)
+	}
 }

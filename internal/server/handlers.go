@@ -212,7 +212,8 @@ func (s *Server) handlePrune(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"status": "removed"})
 }
 
-// handleStream serves sync events as Server-Sent Events.
+// handleStream serves sync events as Server-Sent Events, first replaying the
+// current run's snapshot so a mid-run page load resumes cleanly.
 func (s *Server) handleStream(w http.ResponseWriter, r *http.Request) {
 	flusher, ok := w.(http.Flusher)
 	if !ok {
@@ -221,27 +222,49 @@ func (s *Server) handleStream(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
-	ch := s.hub.subscribe()
+	ch, snap := s.hub.subscribe()
 	defer s.hub.unsubscribe(ch)
 	enc := json.NewEncoder(w)
+	send := func(e syncer.Event) bool {
+		if _, err := w.Write([]byte("data: ")); err != nil {
+			return false
+		}
+		if err := enc.Encode(e); err != nil { // Encode writes a trailing newline
+			return false
+		}
+		if _, err := w.Write([]byte("\n")); err != nil { // blank line ends the SSE event
+			return false
+		}
+		flusher.Flush()
+		return true
+	}
+	for _, e := range snap {
+		if !send(e) {
+			return
+		}
+	}
 	for {
 		select {
 		case <-r.Context().Done():
 			return
 		case e, ok := <-ch:
-			if !ok {
+			if !ok || !send(e) {
 				return
 			}
-			if _, err := w.Write([]byte("data: ")); err != nil {
-				return
-			}
-			if err := enc.Encode(e); err != nil {
-				return
-			}
-			if _, err := w.Write([]byte("\n")); err != nil {
-				return
-			}
-			flusher.Flush()
 		}
 	}
+}
+
+// handleStatus reports whether a sync is running, with the current run's events.
+func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
+	// Read running and the event snapshot under one lock hold so the response
+	// is internally consistent — running cannot flip between the two reads.
+	s.mu.Lock()
+	running := s.running
+	events := s.hub.snapshot()
+	s.mu.Unlock()
+	writeJSON(w, http.StatusOK, map[string]any{
+		"running": running,
+		"events":  events,
+	})
 }

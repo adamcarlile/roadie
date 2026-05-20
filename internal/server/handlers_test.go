@@ -183,3 +183,24 @@ func TestPruneRefusesDangerousPaths(t *testing.T) {
 		t.Error("dest contents must survive refused prunes")
 	}
 }
+
+func TestStatusEndpoint(t *testing.T) {
+	rec := httptest.NewRecorder()
+	testServer(t).Handler().ServeHTTP(rec, httptest.NewRequest("GET", "/api/sync/status", nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status %d, want 200", rec.Code)
+	}
+	var got struct {
+		Running bool  `json:"running"`
+		Events  []any `json:"events"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatal(err)
+	}
+	if got.Running {
+		t.Error("running should be false on an idle server")
+	}
+	if len(got.Events) != 0 {
+		t.Errorf("events = %v, want empty on an idle server", got.Events)
+	}
+}
