@@ -724,7 +724,7 @@ func sameVersion(a, b string) bool {
 
 // download fetches url and returns the response body.
 func download(url string) ([]byte, error) {
-	resp, err := http.Get(url)
+	resp, err := httpClient.Get(url)
 	if err != nil {
 		return nil, err
 	}
