@@ -36,7 +36,11 @@ func rsyncArgs(j Job) []string {
 // Run copies each job in order, emitting events through emit. A failed job is
 // recorded and the run continues.
 func (r *Runner) Run(ctx context.Context, jobs []Job, emit func(Event)) Summary {
-	emit(Event{Type: EvRunStart, TotalEntries: len(jobs)})
+	refs := make([]EvJob, len(jobs))
+	for i, j := range jobs {
+		refs[i] = EvJob{Collection: j.Collection, Path: j.Path}
+	}
+	emit(Event{Type: EvRunStart, TotalEntries: len(jobs), Jobs: refs})
 	var s Summary
 	for i, j := range jobs {
 		if ctx.Err() != nil {
