@@ -18,3 +18,26 @@ button.row { background: #3b82f6; color: #fff; border: 0; padding: .25rem .6rem;
 .overlap { color: #fbbf24; font-size: .8rem; }
 .bar { height: 1rem; background: #2a2f38; margin: .25rem 0; }
 .bar > div { height: 100%; background: #3b82f6; }
+
+/* --- Browse rows -------------------------------------------------------- */
+#objects li.row { display: block; padding: 0; border-bottom: none; }
+.rowline { display: flex; align-items: center; gap: .5rem; padding: .5rem .8rem;
+           border-bottom: 1px solid #2a2f38; }
+#objects > li.row:nth-child(even) > .rowline { background: #181c22; }
+.subtree > li.row:nth-child(even) > .rowline { background: #15191f; }
+/* hover is declared after zebra; equal specificity means source order wins */
+#objects li.row > .rowline:hover { background: #222834; box-shadow: inset 3px 0 0 #3b82f6; }
+.caret { width: 1rem; color: #7a8290; user-select: none; }
+.caret.active { cursor: pointer; color: #e6e6e6; }
+.rowline .state { width: 1.2rem; text-align: center; }
+.rowline .name { flex: 1; }
+.rowline .actions { display: flex; gap: .4rem; }
+li.row.covered > .rowline { opacity: .55; }
+.ic.synced { color: #4ade80; }
+.ic.pending, .ic.partial { color: #fbbf24; }
+.ic.blocked { color: #f87171; }
+.subtree { list-style: none; margin: 0 0 0 1.6rem; padding: 0;
+           border-left: 2px solid #3a3f48; background: #101317; }
+.row-btn { background: #3b82f6; color: #fff; border: 0; padding: .25rem .6rem;
+           cursor: pointer; border-radius: 3px; }
+.row-btn.remove { background: #3a3f48; color: #e6e6e6; }

@@ -10,7 +10,7 @@ const api = (p, opts) =>
 const esc = (s) =>
   String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
 
-// Tab switching.
+// --- Tab switching -------------------------------------------------------
 document.querySelectorAll("nav button").forEach((b) => {
   b.onclick = () => {
     document.querySelectorAll("nav button").forEach((x) => x.classList.remove("active"));
@@ -18,70 +18,193 @@ document.querySelectorAll("nav button").forEach((b) => {
     b.classList.add("active");
     $("#" + b.dataset.tab).classList.add("active");
     if (b.dataset.tab === "manifest") loadManifest();
+    if (b.dataset.tab === "browse") refreshDecoration();
   };
 });
 
+// --- Browse --------------------------------------------------------------
 let collections = [];
+let planEntries = []; // picked manifest entries with computed status
 
 async function loadCollections() {
   try {
     collections = await api("/api/collections");
   } catch (err) {
-    $("#objects").innerHTML = `<li>Failed to load collections: ${esc(err.message)}</li>`;
+    $("#objects").innerHTML = `<li class="row">Failed to load collections: ${esc(err.message)}</li>`;
     return;
   }
   const sel = $("#collection");
   sel.innerHTML = collections
     .map((c) => `<option value="${esc(c.id)}">${esc(c.label)}</option>`)
     .join("");
-  sel.onchange = () => browse(sel.value, "");
-  if (collections.length) browse(collections[0].id, "");
+  sel.onchange = () => openCollection(sel.value);
+  if (collections.length) openCollection(collections[0].id);
 }
 
-async function browse(id, basePath) {
-  const col = collections.find((c) => c.id === id);
-  const ul = $("#objects");
-  if (!col) {
-    ul.innerHTML = "<li>Unknown collection</li>";
+// loadPlan refreshes the picked-entry list used to decorate browse rows.
+async function loadPlan() {
+  try {
+    const v = await api("/api/manifest");
+    planEntries = v.plan.entries;
+  } catch {
+    planEntries = []; // decoration is best-effort; browsing still works
+  }
+}
+
+// covers reports whether path a equals, or is an ancestor directory of, b.
+function covers(a, b) {
+  return a === b || b.startsWith(a + "/");
+}
+
+// statusFor classifies a browse object against the picked manifest entries.
+function statusFor(collection, path) {
+  const here = planEntries.filter((e) => e.entry.collection === collection);
+  const exact = here.find((e) => e.entry.path === path);
+  if (exact) return { kind: "picked", status: exact.status };
+  const ancestor = here.find((e) => covers(e.entry.path, path));
+  if (ancestor) return { kind: "covered", status: ancestor.status };
+  if (here.some((e) => covers(path, e.entry.path))) return { kind: "partial" };
+  return { kind: "none" };
+}
+
+const STATE_ICONS = {
+  synced: '<span class="ic synced" title="On the drive">✓</span>',
+  pending: '<span class="ic pending" title="Queued to copy">↓</span>',
+  blocked: '<span class="ic blocked" title="Source unavailable">✗</span>',
+  partial: '<span class="ic partial" title="Some seasons picked">◐</span>',
+};
+
+// decorateRow sets one row's status icon and action button from the plan.
+function decorateRow(li) {
+  const state = li.querySelector(":scope > .rowline > .state");
+  const actions = li.querySelector(":scope > .rowline > .actions");
+  if (!state || !actions) return; // placeholder/error row — nothing to decorate
+  const st = statusFor(li.dataset.collection, li.dataset.path);
+  li.classList.toggle("covered", st.kind === "covered");
+  if (st.kind === "picked") {
+    state.innerHTML = STATE_ICONS[st.status] || "";
+    actions.innerHTML = `<button class="row-btn remove">Remove</button>`;
+  } else if (st.kind === "covered") {
+    state.innerHTML = STATE_ICONS[st.status] || "";
+    actions.innerHTML = ""; // managed via the parent row
+  } else if (st.kind === "partial") {
+    state.innerHTML = STATE_ICONS.partial;
+    actions.innerHTML = `<button class="row-btn">Add all</button>`;
+  } else {
+    state.innerHTML = "";
+    actions.innerHTML = `<button class="row-btn">Add</button>`;
+  }
+  const btn = actions.querySelector("button");
+  if (btn) {
+    const remove = st.kind === "picked";
+    btn.onclick = (e) => {
+      e.stopPropagation();
+      (remove ? removeEntry : addEntry)(li.dataset.collection, li.dataset.path);
+    };
+  }
+}
+
+// refreshDecoration reloads the plan and re-decorates every rendered row.
+async function refreshDecoration() {
+  await loadPlan();
+  document.querySelectorAll("#objects li.row").forEach(decorateRow);
+}
+
+// makeRow builds one <li> browse row for a pickable object.
+function makeRow(col, basePath, obj) {
+  const full = basePath ? basePath + "/" + obj.name : obj.name;
+  const li = document.createElement("li");
+  li.className = "row";
+  li.dataset.name = obj.name.toLowerCase();
+  li.dataset.collection = col.id;
+  li.dataset.path = full;
+  const expandable = obj.isDir && col.kind === "tv";
+  const glyph = obj.isDir ? "📁" : "🎬";
+  li.innerHTML =
+    `<div class="rowline">` +
+      `<span class="caret">${expandable ? "▸" : ""}</span>` +
+      `<span class="state"></span>` +
+      `<span class="name">${glyph} ${esc(obj.name)}</span>` +
+      `<span class="actions"></span>` +
+    `</div>`;
+  if (expandable) {
+    const caret = li.querySelector(":scope > .rowline > .caret");
+    caret.classList.add("active");
+    caret.onclick = (e) => {
+      e.stopPropagation();
+      toggleExpand(li, col);
+    };
+  }
+  decorateRow(li);
+  return li;
+}
+
+// toggleExpand opens or closes a tv folder's subtree inline.
+async function toggleExpand(li, col) {
+  const caret = li.querySelector(":scope > .rowline > .caret");
+  const open = li.querySelector(":scope > .subtree");
+  if (open) {
+    open.remove();
+    caret.textContent = "▸";
     return;
   }
-  $("#filter").value = ""; // a stale filter from the previous view would mislead
+  caret.textContent = "▾";
+  const sub = document.createElement("ul");
+  sub.className = "subtree";
+  li.appendChild(sub);
   let objs;
   try {
-    objs = await api(`/api/collections/${id}/browse?path=${encodeURIComponent(basePath)}`);
+    objs = await api(
+      `/api/collections/${col.id}/browse?path=${encodeURIComponent(li.dataset.path)}`,
+    );
   } catch (err) {
-    ul.innerHTML = `<li>Source unavailable: ${esc(err.message)}</li>`;
+    sub.innerHTML =
+      `<li class="row"><div class="rowline"><span class="name">Unavailable: ${esc(err.message)}</span></div></li>`;
     return;
   }
-  ul.innerHTML = "";
-  if (basePath) {
-    const up = document.createElement("li");
-    up.innerHTML = `<span>⬆ up</span>`;
-    up.onclick = () => browse(id, basePath.split("/").slice(0, -1).join("/"));
-    ul.appendChild(up);
+  objs.forEach((o) => sub.appendChild(makeRow(col, li.dataset.path, o)));
+  applyFilter($("#filter").value);
+}
+
+// openCollection renders a collection's top level into #objects.
+async function openCollection(id) {
+  const col = collections.find((c) => c.id === id);
+  const root = $("#objects");
+  $("#filter").value = ""; // a stale filter from the previous collection would mislead
+  if (!col) {
+    root.innerHTML =
+      `<li class="row"><div class="rowline"><span class="name">Unknown collection</span></div></li>`;
+    return;
   }
-  objs.forEach((o) => {
-    const full = basePath ? basePath + "/" + o.name : o.name;
-    const li = document.createElement("li");
-    li.dataset.name = o.name.toLowerCase();
-    const drill =
-      o.isDir && col.kind === "tv"
-        ? `<button class="row" data-act="open">Open</button>`
-        : "";
-    li.innerHTML = `<span>${o.isDir ? "📁" : "🎬"} ${esc(o.name)}</span>
-      <span>${drill}<button class="row" data-act="add">Add</button></span>`;
-    li.querySelector('[data-act="add"]').onclick = () => addEntry(id, full);
-    if (drill) li.querySelector('[data-act="open"]').onclick = () => browse(id, full);
-    ul.appendChild(li);
+  root.innerHTML = "";
+  await loadPlan();
+  let objs;
+  try {
+    objs = await api(`/api/collections/${id}/browse?path=`);
+  } catch (err) {
+    root.innerHTML =
+      `<li class="row"><div class="rowline"><span class="name">Source unavailable: ${esc(err.message)}</span></div></li>`;
+    return;
+  }
+  objs.forEach((o) => root.appendChild(makeRow(col, "", o)));
+}
+
+// applyFilter shows/hides top-level rows by name; subtrees hide while filtering.
+function applyFilter(q) {
+  q = q.toLowerCase();
+  document.querySelectorAll("#objects > li.row").forEach((li) => {
+    if (li.dataset.name === undefined) {
+      li.style.display = ""; // placeholder/error row — never filtered out
+      return;
+    }
+    li.style.display = li.dataset.name.includes(q) ? "" : "none";
+  });
+  document.querySelectorAll("#objects .subtree").forEach((ul) => {
+    ul.style.display = q ? "none" : "";
   });
 }
 
-$("#filter").oninput = (e) => {
-  const q = e.target.value.toLowerCase();
-  document.querySelectorAll("#objects li[data-name]").forEach((li) => {
-    li.style.display = li.dataset.name.includes(q) ? "" : "none";
-  });
-};
+$("#filter").oninput = (e) => applyFilter(e.target.value);
 
 async function addEntry(collection, path) {
   try {
@@ -90,9 +213,21 @@ async function addEntry(collection, path) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ collection, path }),
     });
-    alert(`Added ${path}`);
+    await refreshDecoration();
   } catch (err) {
     alert(`Failed to add ${path}: ${err.message}`);
+  }
+}
+
+async function removeEntry(collection, path) {
+  try {
+    await api(
+      `/api/manifest/entries?collection=${encodeURIComponent(collection)}&path=${encodeURIComponent(path)}`,
+      { method: "DELETE" },
+    );
+    await refreshDecoration();
+  } catch (err) {
+    alert(`Failed to remove ${path}: ${err.message}`);
   }
 }
 
