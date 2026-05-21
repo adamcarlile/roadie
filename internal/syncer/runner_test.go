@@ -79,6 +79,43 @@ func TestRunContinuesPastFailedJob(t *testing.T) {
 	}
 }
 
+func TestRunStartCarriesJobList(t *testing.T) {
+	root := t.TempDir()
+	src := filepath.Join(root, "src")
+	dst := filepath.Join(root, "dst")
+	for _, d := range []string{src, dst} {
+		if err := os.MkdirAll(d, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write(t, filepath.Join(src, "Cars (2006).mkv"), "movie")
+	write(t, filepath.Join(src, "Up (2009).mkv"), "movie")
+
+	jobs := []Job{
+		{Collection: "movies", Path: "Cars (2006).mkv", Source: src, Dest: dst},
+		{Collection: "movies", Path: "Up (2009).mkv", Source: src, Dest: dst},
+	}
+	var start Event
+	NewRunner().Run(context.Background(), jobs, func(e Event) {
+		if e.Type == EvRunStart {
+			start = e
+		}
+	})
+
+	want := []EvJob{
+		{Collection: "movies", Path: "Cars (2006).mkv"},
+		{Collection: "movies", Path: "Up (2009).mkv"},
+	}
+	if len(start.Jobs) != len(want) {
+		t.Fatalf("run-start Jobs = %+v, want %+v", start.Jobs, want)
+	}
+	for i := range want {
+		if start.Jobs[i] != want[i] {
+			t.Errorf("Jobs[%d] = %+v, want %+v", i, start.Jobs[i], want[i])
+		}
+	}
+}
+
 func write(t *testing.T, p, body string) {
 	t.Helper()
 	if err := os.WriteFile(p, []byte(body), 0o644); err != nil {
