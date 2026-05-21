@@ -519,7 +519,7 @@ let jobRows = {}; // "collection\0path" -> <li> for the current run
 let runState = { total: 0, done: 0, copied: 0, failed: 0 };
 
 function jobKey(collection, path) {
-  return collection + " " + path;
+  return collection + "\u0000" + path;
 }
 
 // setSyncing reflects run state on the Sync button.
