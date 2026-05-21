@@ -916,7 +916,7 @@ builds:
 
 archives:
   - id: roadie
-    format: binary
+    formats: [binary]
     name_template: "roadie_{{ .Os }}_{{ .Arch }}"
 
 checksum:
