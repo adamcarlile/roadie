@@ -41,3 +41,31 @@ li.row.covered > .rowline { opacity: .55; }
 .row-btn { background: #3b82f6; color: #fff; border: 0; padding: .25rem .6rem;
            cursor: pointer; border-radius: 3px; }
 .row-btn.remove { background: #3a3f48; color: #e6e6e6; }
+
+/* --- Sync run ----------------------------------------------------------- */
+.run-head { padding: .2rem 0 1rem; }
+.run-line { display: flex; justify-content: space-between; margin-bottom: .35rem; }
+#run-count { color: #7a8290; }
+.run-line .ok { color: #4ade80; }
+.run-line .warn { color: #fbbf24; }
+.run-line .err { color: #f87171; }
+.bar.big { height: .55rem; }
+#run-bar { width: 0; transition: width .2s; }
+#run-bar.ok { background: #4ade80; }
+#run-bar.warn { background: #fbbf24; }
+#job-list { padding: 0; }
+li.job { display: block; padding: .5rem .8rem; border-bottom: 1px solid #2a2f38; }
+li.job:nth-child(even) { background: #181c22; }
+li.job.copying { background: #222834; box-shadow: inset 3px 0 0 #3b82f6; }
+.job-line { display: flex; align-items: center; gap: .6rem; }
+.job-ic { width: 1.2rem; text-align: center; }
+.job.queued .job-ic, .job.queued .job-name { color: #7a8290; }
+.job.copying .job-ic { color: #3b82f6; }
+.job.done .job-ic { color: #4ade80; }
+.job.failed .job-ic { color: #f87171; }
+.job-name { flex: 1; }
+.job-meta { font-size: .75rem; color: #7a8290; }
+.job-err { font-size: .72rem; color: #f87171; margin: .15rem 0 0 1.8rem; }
+.bar.job-bar { height: .4rem; margin: .35rem 0 0 1.8rem; }
+.sync-idle { color: #7a8290; }
+.sync-err { color: #f87171; }

@@ -288,30 +288,147 @@ async function loadManifest() {
   });
 }
 
-// Live sync — one SSE connection for the page lifetime.
+// --- Live sync -----------------------------------------------------------
+let jobRows = {}; // "collection\0path" -> <li> for the current run
+let runState = { total: 0, done: 0, copied: 0, failed: 0 };
+
+function jobKey(collection, path) {
+  return collection + "\u0000" + path;
+}
+
+// setSyncing reflects run state on the Sync button.
+function setSyncing(on) {
+  const btn = $("#sync-btn");
+  btn.disabled = on;
+  btn.textContent = on ? "Syncing…" : "Sync now";
+}
+
+// updateRunHead repaints the overall progress bar and count. curPercent is
+// the in-flight entry's percent, so the bar advances smoothly within a job.
+function updateRunHead(curPercent) {
+  const { total, done, copied, failed } = runState;
+  const frac = total ? (done + (curPercent || 0) / 100) / total : 0;
+  $("#run-bar").style.width = Math.min(100, frac * 100) + "%";
+  $("#run-count").textContent =
+    `${done} of ${total}` +
+    (copied || failed ? ` · ${copied} copied · ${failed} failed` : "");
+}
+
+// renderRunStart builds the checklist — one row per job — from run-start.
+function renderRunStart(e) {
+  jobRows = {};
+  runState = { total: (e.jobs || []).length, done: 0, copied: 0, failed: 0 };
+  const box = $("#progress");
+  if (!runState.total) {
+    box.innerHTML =
+      `<p class="sync-idle">Everything in the manifest is already on the drive — nothing to copy.</p>`;
+    setSyncing(false);
+    return;
+  }
+  setSyncing(true);
+  box.innerHTML =
+    `<div class="run-head">` +
+      `<div class="run-line"><strong id="run-label">Syncing</strong><span id="run-count"></span></div>` +
+      `<div class="bar big"><div id="run-bar"></div></div>` +
+    `</div><ul id="job-list"></ul>`;
+  const list = $("#job-list");
+  e.jobs.forEach((j) => {
+    const li = document.createElement("li");
+    li.className = "job queued";
+    li.innerHTML =
+      `<div class="job-line">` +
+        `<span class="job-ic">·</span>` +
+        `<span class="job-name">${esc(j.path)}</span>` +
+        `<span class="job-meta">queued</span>` +
+      `</div>`;
+    jobRows[jobKey(j.collection, j.path)] = li;
+    list.appendChild(li);
+  });
+  updateRunHead(0);
+}
+
+function onEntryStart(e) {
+  const li = jobRows[jobKey(e.collection, e.path)];
+  if (!li) return;
+  li.className = "job copying";
+  li.querySelector(".job-ic").textContent = "▶";
+  li.querySelector(".job-meta").textContent = "0%";
+  const bar = document.createElement("div");
+  bar.className = "bar job-bar";
+  bar.innerHTML = "<div></div>";
+  li.appendChild(bar);
+}
+
+function onEntryProgress(e) {
+  const li = jobRows[jobKey(e.collection, e.path)];
+  if (!li) return;
+  const fill = li.querySelector(".job-bar > div");
+  if (fill) fill.style.width = e.percent + "%";
+  li.querySelector(".job-meta").textContent =
+    `${e.percent}%` + (e.rate ? ` · ${e.rate}` : "") + (e.eta ? ` · ETA ${e.eta}` : "");
+  updateRunHead(e.percent);
+}
+
+function onEntryDone(e) {
+  runState.done++;
+  if (e.err) runState.failed++;
+  else runState.copied++;
+  const li = jobRows[jobKey(e.collection, e.path)];
+  if (li) {
+    const bar = li.querySelector(".job-bar");
+    if (bar) bar.remove();
+    li.querySelector(".job-ic").textContent = e.err ? "✗" : "✓";
+    li.querySelector(".job-meta").textContent = e.err ? "failed" : "done";
+    li.className = e.err ? "job failed" : "job done";
+    if (e.err) {
+      const err = document.createElement("div");
+      err.className = "job-err";
+      err.textContent = e.err; // textContent — rsync stderr is not trusted markup
+      li.appendChild(err);
+    }
+  }
+  updateRunHead(0);
+}
+
+function onRunDone(e) {
+  setSyncing(false);
+  if (e.err && !runState.total) {
+    // Pre-flight abort published without a preceding run-start (e.g. no space).
+    $("#progress").innerHTML = `<p class="sync-err">Sync aborted: ${esc(e.err)}</p>`;
+    return;
+  }
+  const label = $("#run-label");
+  if (!label) return; // empty run already showed its own message
+  if (e.err) {
+    label.textContent = `Sync aborted: ${e.err}`;
+    label.className = "err";
+  } else {
+    label.textContent = `Done — ${e.copied} copied, ${e.failed} failed`;
+    label.className = e.failed ? "warn" : "ok";
+  }
+  const bar = $("#run-bar");
+  if (bar) bar.className = e.err || e.failed ? "warn" : "ok";
+}
+
+// One SSE connection for the page lifetime; the hub replays the current run
+// on connect, so a mid-sync reload rebuilds the checklist where it left off.
 const events = new EventSource("/api/sync/stream");
 events.onmessage = (m) => {
   const e = JSON.parse(m.data);
-  const box = $("#progress");
-  if (e.type === "run-start") {
-    box.innerHTML = `<p>Starting ${e.totalEntries} job(s)…</p>`;
-  } else if (e.type === "entry-start") {
-    box.insertAdjacentHTML(
-      "beforeend",
-      `<p>${esc(e.path)} <span class="bar"><div style="width:0%"></div></span></p>`,
-    );
-  } else if (e.type === "entry-progress") {
-    const bars = document.querySelectorAll(".bar > div");
-    if (bars.length) bars[bars.length - 1].style.width = e.percent + "%";
-  } else if (e.type === "run-done") {
-    const msg = e.err
-      ? `Sync aborted: ${esc(e.err)}`
-      : `Done — ${e.copied} copied, ${e.failed} failed.`;
-    box.insertAdjacentHTML("beforeend", `<p>${msg}</p>`);
-  }
+  if (e.type === "run-start") renderRunStart(e);
+  else if (e.type === "entry-start") onEntryStart(e);
+  else if (e.type === "entry-progress") onEntryProgress(e);
+  else if (e.type === "entry-done") onEntryDone(e);
+  else if (e.type === "run-done") onRunDone(e);
 };
 
-$("#sync-btn").onclick = () =>
-  api("/api/sync", { method: "POST" }).catch((e) => alert("Sync: " + e.message));
+$("#sync-btn").onclick = () => {
+  setSyncing(true);
+  api("/api/sync", { method: "POST" }).catch((err) => {
+    const running = err.message === "409";
+    if (!running) setSyncing(false); // 409 means a run is genuinely in progress
+    alert("Sync: " + (running ? "a sync is already running" : err.message));
+  });
+};
 
 loadCollections();
