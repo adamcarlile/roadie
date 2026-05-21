@@ -21,22 +21,39 @@ on explicit confirmation.
 Implemented. See the [design spec](docs/superpowers/specs/2026-05-20-roadie-design.md)
 and the [implementation plan](docs/superpowers/plans/2026-05-20-roadie.md).
 
-## Build & deploy
+## Install
+
+On the carnet box, one command:
 
 ```bash
-GOOS=linux GOARCH=amd64 go build -o roadie ./...
-scp roadie adam@carnet.home.adamcarlile.com:/tmp/roadie
-scp collections.toml.example adam@carnet.home.adamcarlile.com:/tmp/
-scp deploy/roadie.service adam@carnet.home.adamcarlile.com:/tmp/
+curl -sSL https://raw.githubusercontent.com/adamcarlile/roadie/main/install.sh | sudo sh
 ```
 
-On the carnet box:
+It downloads the latest release, verifies its checksum, and runs a guided setup
+that installs the binary, writes a default config, and enables the service. The
+UI is then at `http://carnet.home.adamcarlile.com:8473`.
+
+## Update
+
 ```bash
-sudo install -m755 /tmp/roadie /usr/local/bin/roadie
-sudo mkdir -p /etc/roadie /var/lib/roadie
-sudo cp /tmp/collections.toml.example /etc/roadie/collections.toml
-sudo cp /tmp/roadie.service /etc/systemd/system/roadie.service
-sudo systemctl enable --now roadie
+sudo roadie update
 ```
 
-The UI is then at `http://carnet.home.adamcarlile.com:8473`.
+Fetches the latest release, verifies it, swaps the binary, and restarts the
+service. `roadie version` prints the running version.
+
+## Releasing
+
+Releases are cut from git tags. Pushing a tag builds and publishes a GitHub
+Release:
+
+```bash
+git tag v1.2.0
+git push origin v1.2.0
+```
+
+## Build from source
+
+```bash
+go build -o roadie .
+```
