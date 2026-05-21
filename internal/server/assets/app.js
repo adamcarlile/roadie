@@ -291,6 +291,7 @@ async function loadManifest() {
 // --- Live sync -----------------------------------------------------------
 let jobRows = {}; // "collection\0path" -> <li> for the current run
 let runState = { total: 0, done: 0, copied: 0, failed: 0 };
+let runActive = false; // true once a run-start is seen, until its run-done
 
 function jobKey(collection, path) {
   return collection + "\u0000" + path;
@@ -306,9 +307,11 @@ function setSyncing(on) {
 // updateRunHead repaints the overall progress bar and count. curPercent is
 // the in-flight entry's percent, so the bar advances smoothly within a job.
 function updateRunHead(curPercent) {
+  const bar = $("#run-bar");
+  if (!bar) return; // overall header not rendered (event arrived before run-start)
   const { total, done, copied, failed } = runState;
   const frac = total ? (done + (curPercent || 0) / 100) / total : 0;
-  $("#run-bar").style.width = Math.min(100, frac * 100) + "%";
+  bar.style.width = Math.min(100, frac * 100) + "%";
   $("#run-count").textContent =
     `${done} of ${total}` +
     (copied || failed ? ` · ${copied} copied · ${failed} failed` : "");
@@ -316,6 +319,7 @@ function updateRunHead(curPercent) {
 
 // renderRunStart builds the checklist — one row per job — from run-start.
 function renderRunStart(e) {
+  runActive = true;
   jobRows = {};
   runState = { total: (e.jobs || []).length, done: 0, copied: 0, failed: 0 };
   const box = $("#progress");
@@ -392,11 +396,12 @@ function onEntryDone(e) {
 
 function onRunDone(e) {
   setSyncing(false);
-  if (e.err && !runState.total) {
-    // Pre-flight abort published without a preceding run-start (e.g. no space).
+  if (e.err && !runActive) {
+    // A run-done with no preceding run-start — a pre-flight abort.
     $("#progress").innerHTML = `<p class="sync-err">Sync aborted: ${esc(e.err)}</p>`;
     return;
   }
+  runActive = false;
   const label = $("#run-label");
   if (!label) return; // empty run already showed its own message
   if (e.err) {
